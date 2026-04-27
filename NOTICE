@@ -1,16 +1,64 @@
-CORD Specification
-Copyright 2025 CORD Specification
+CORD Engine — Reference Implementation
+Copyright 2025-2026 CORD Protocol Holdings
 
 This product includes software developed as part of the CORD
-(Canonical Object for Relational Data) open specification.
+(Canonical Object for Relational Data) open specification, available
+at https://cordspec.org.
 
+================================================================
 PATENT NOTICE
+================================================================
 
-Certain methods and systems implemented in this software may be
-covered by pending patent applications. Use of this software under
-the Apache License 2.0 includes a grant of patent rights as specified
-in Section 3 of that license.
+The CORD reference engine implements methods that are the subject of
+pending patent application No. 64/034,169 ("Canonical Object for
+Relational Data"), filed April 2026. The patent claims include, without
+limitation:
 
-This notice is provided for informational purposes only. The Apache
-License 2.0 governs your rights to use, modify, and distribute this
-software. No additional restrictions beyond those in the license apply.
+  - The Envelope Fidelity Score (EFS) computation method, including
+    the PARTIAL coefficient bounds and confidence-based propagation
+  - The three-category conformance validation framework
+  - The four-tier conformance classification system
+  - The application/cord+json envelope format
+  - EFS as a cross-system fidelity metric
+
+The Apache License 2.0 under which this source code is distributed
+includes a patent grant in Section 3. That grant covers contributions
+made to this codebase by contributors. It does not, by itself, grant a
+license to commercialize products that practice the claims of patent
+application No. 64/034,169 in fields outside the scope of the Apache
+License 2.0 §3 grant.
+
+What this means in practice:
+
+  - You may freely use, modify, and distribute this source code under
+    the Apache License 2.0.
+  - You may run this engine for evaluation, internal use, research,
+    and any other use consistent with Apache 2.0.
+  - You may build derivative works and distribute them under
+    Apache 2.0.
+  - If you build a commercial product whose value proposition
+    depends on the patented methods (notably, products marketed as
+    providing fidelity scoring or conformance certification at scale),
+    a patent license may be required. Contact licensing@cordspec.org.
+
+The CORD specification itself (https://cordspec.org) is Apache 2.0
+and may be implemented by anyone, in any product, with or without
+reference to this codebase. Independent implementations of EFS and
+conformance from the published spec are expressly contemplated and
+welcomed.
+
+================================================================
+TRADEMARK
+================================================================
+
+"CORD" and "CORD-Compliant" are designations of CORD Protocol Holdings.
+Use of "CORD-Compliant" to describe a product requires successful
+completion of the CORD conformance certification process. Information
+on certification is available at https://cordspec.org/certification.
+
+================================================================
+
+Nothing in this NOTICE alters the rights granted by the Apache License
+2.0 with respect to the source code in this repository. This NOTICE is
+informational and exists to make the patent landscape explicit to
+implementers and downstream users.

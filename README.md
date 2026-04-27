@@ -121,6 +121,12 @@ docker-compose up
 
 This engine implements the [CORD v1.0 specification](https://cordspec.org). The spec is the standard. This engine is one implementation of it. Any other system can implement CORD independently using the spec. This engine is not the only valid implementation.
 
+## Patents and certification
+
+The reference engine implements methods covered by pending patent application No. 64/034,169. The Apache 2.0 license under which the source is distributed grants you broad rights to use, modify, and distribute the code. See [PATENTS.md](PATENTS.md) for a plain-language explanation of what the patent covers, what you can do without a patent license, and when a license becomes relevant (productized fidelity scoring at scale, certification authority, and a few other narrow situations).
+
+The "CORD-Compliant" designation requires successful completion of the CORD certification process, run by [CORD Protocol Holdings](https://cordspec.org/certification). The conformance test suite in this repository is the basis for certification.
+
 ## License
 
-Apache 2.0 — see [LICENSE](LICENSE).
+Apache 2.0 — see [LICENSE](LICENSE) and [NOTICE](NOTICE).
