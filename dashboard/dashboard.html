@@ -1,0 +1,1007 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CORD Reference Dashboard</title>
+<meta name="description" content="Reference dashboard for visualizing CORD envelope EFS distributions, per-field loss patterns, and conformance gaps. Drop in a folder of .cord.json envelopes and inspect.">
+<style>
+  :root {
+    --bg: #0c0e12;
+    --bg-2: #14171c;
+    --bg-3: #1a1e25;
+    --border: #262b34;
+    --border-strong: #353c47;
+    --fg: #e8eaee;
+    --fg-2: #a8aeb8;
+    --fg-3: #6b7280;
+    --accent: #6ea8fe;
+    --accent-2: #4f7fcc;
+    --good: #5fb877;
+    --warn: #d4a04a;
+    --bad: #d96a6a;
+    --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--fg);
+    font-size: 14px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 18px 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--bg-2);
+  }
+  header h1 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+  header h1 .v { color: var(--fg-3); font-weight: 400; margin-left: 8px; font-family: var(--mono); }
+  header .links { display: flex; gap: 18px; font-size: 13px; color: var(--fg-2); }
+  header .links a { color: var(--fg-2); text-decoration: none; }
+  header .links a:hover { color: var(--fg); }
+
+  main { padding: 28px; max-width: 1400px; margin: 0 auto; }
+
+  .panel {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 22px 24px;
+    margin-bottom: 20px;
+  }
+  .panel h2 {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--fg-3);
+    margin: 0 0 14px;
+  }
+
+  /* Drop zone */
+  .dropzone {
+    border: 1px dashed var(--border-strong);
+    border-radius: 4px;
+    padding: 36px;
+    text-align: center;
+    color: var(--fg-2);
+    cursor: pointer;
+    transition: border-color 0.12s, background 0.12s;
+  }
+  .dropzone:hover { border-color: var(--accent); background: var(--bg-3); }
+  .dropzone.over { border-color: var(--accent); background: var(--bg-3); color: var(--fg); }
+  .dropzone p { margin: 0 0 8px; }
+  .dropzone .hint { font-size: 12px; color: var(--fg-3); }
+  .dropzone .or { display: inline-block; margin: 12px 0 8px; font-size: 12px; color: var(--fg-3); }
+  .dropzone button {
+    background: var(--bg-3);
+    color: var(--fg);
+    border: 1px solid var(--border-strong);
+    padding: 8px 16px;
+    border-radius: 3px;
+    font-size: 13px;
+    font-family: var(--sans);
+    cursor: pointer;
+  }
+  .dropzone button:hover { border-color: var(--accent); }
+
+  /* Stats row */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+  .stat {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 18px 20px;
+  }
+  .stat-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--fg-3);
+    margin-bottom: 8px;
+  }
+  .stat-value {
+    font-family: var(--mono);
+    font-size: 26px;
+    font-weight: 500;
+    color: var(--fg);
+  }
+  .stat-sub {
+    font-size: 12px;
+    color: var(--fg-3);
+    margin-top: 4px;
+  }
+  .stat-value.good { color: var(--good); }
+  .stat-value.warn { color: var(--warn); }
+  .stat-value.bad { color: var(--bad); }
+
+  /* Filters */
+  .filters {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-bottom: 16px;
+    padding: 14px 16px;
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+  }
+  .filters label {
+    font-size: 11px;
+    color: var(--fg-3);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-right: 6px;
+  }
+  .filters select, .filters input {
+    background: var(--bg-3);
+    color: var(--fg);
+    border: 1px solid var(--border);
+    padding: 6px 10px;
+    border-radius: 3px;
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .filters .spacer { flex: 1; }
+  .filters button {
+    background: transparent;
+    color: var(--fg-2);
+    border: 1px solid var(--border-strong);
+    padding: 6px 14px;
+    border-radius: 3px;
+    font-size: 12px;
+    cursor: pointer;
+    font-family: var(--sans);
+  }
+  .filters button:hover { color: var(--fg); border-color: var(--accent); }
+  .filters .display-toggle {
+    display: inline-flex;
+    background: var(--bg-3);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .filters .display-toggle button {
+    border: none;
+    border-radius: 0;
+    padding: 6px 12px;
+    background: transparent;
+  }
+  .filters .display-toggle button.active {
+    background: var(--accent-2);
+    color: #fff;
+  }
+
+  /* Histogram */
+  .histogram {
+    display: grid;
+    grid-template-columns: repeat(10, 1fr);
+    gap: 4px;
+    height: 140px;
+    align-items: end;
+    margin-top: 12px;
+  }
+  .hist-bar {
+    background: var(--accent-2);
+    border-radius: 2px 2px 0 0;
+    min-height: 2px;
+    position: relative;
+    transition: background 0.12s;
+  }
+  .hist-bar:hover { background: var(--accent); }
+  .hist-bar[data-tier="low"] { background: var(--bad); }
+  .hist-bar[data-tier="mid"] { background: var(--warn); }
+  .hist-bar[data-tier="high"] { background: var(--good); }
+  .hist-labels {
+    display: grid;
+    grid-template-columns: repeat(10, 1fr);
+    gap: 4px;
+    margin-top: 6px;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--fg-3);
+    text-align: center;
+  }
+
+  /* Two column */
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  @media (max-width: 1100px) { .two-col { grid-template-columns: 1fr; } }
+
+  /* Heatmap */
+  .heatmap {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+  .heat-row {
+    display: grid;
+    grid-template-columns: minmax(140px, 1.5fr) 1fr;
+    gap: 12px;
+    align-items: center;
+    padding: 4px 0;
+    font-size: 12px;
+  }
+  .heat-field {
+    font-family: var(--mono);
+    color: var(--fg);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .heat-bar {
+    display: flex;
+    height: 18px;
+    border-radius: 2px;
+    overflow: hidden;
+    background: var(--bg-3);
+  }
+  .heat-segment { height: 100%; }
+  .heat-segment.full { background: var(--good); }
+  .heat-segment.partial { background: var(--warn); }
+  .heat-segment.none { background: var(--bad); }
+
+  /* Envelope list */
+  table.envelope-list {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  table.envelope-list th, table.envelope-list td {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  table.envelope-list th {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--fg-3);
+    font-weight: 600;
+    cursor: pointer;
+    user-select: none;
+  }
+  table.envelope-list th:hover { color: var(--fg); }
+  table.envelope-list th .sort-arrow { font-size: 9px; color: var(--accent); margin-left: 4px; }
+  table.envelope-list td { font-family: var(--mono); color: var(--fg-2); }
+  table.envelope-list td.efs { font-weight: 500; }
+  table.envelope-list td.efs.good { color: var(--good); }
+  table.envelope-list td.efs.warn { color: var(--warn); }
+  table.envelope-list td.efs.bad { color: var(--bad); }
+  table.envelope-list tr.selectable { cursor: pointer; }
+  table.envelope-list tr.selectable:hover td { background: var(--bg-3); }
+  table.envelope-list tr.empty td {
+    text-align: center;
+    color: var(--fg-3);
+    padding: 30px;
+    font-family: var(--sans);
+  }
+
+  /* Modal */
+  .modal-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.6);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+  }
+  .modal-backdrop.open { display: flex; }
+  .modal {
+    background: var(--bg-2);
+    border: 1px solid var(--border-strong);
+    border-radius: 4px;
+    padding: 24px 28px;
+    width: 90%;
+    max-width: 760px;
+    max-height: 86vh;
+    overflow-y: auto;
+  }
+  .modal h3 {
+    font-size: 13px;
+    margin: 0 0 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--fg-3);
+    font-weight: 600;
+  }
+  .modal pre {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 14px;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    line-height: 1.55;
+    color: var(--fg-2);
+    overflow-x: auto;
+    margin: 0 0 14px;
+    max-height: 320px;
+  }
+  .modal .close {
+    float: right;
+    background: transparent;
+    color: var(--fg-2);
+    border: 1px solid var(--border-strong);
+    padding: 4px 12px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 12px;
+  }
+  .modal .close:hover { color: var(--fg); }
+  .modal .meta-row { display: flex; gap: 24px; flex-wrap: wrap; margin-bottom: 16px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+  .modal .meta-row .meta { font-size: 12px; }
+  .modal .meta-row .meta span { color: var(--fg-3); display: block; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 3px; }
+  .modal .meta-row .meta strong { font-family: var(--mono); font-weight: 500; color: var(--fg); }
+
+  /* Status badges */
+  .status-badge {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 2px;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+  }
+  .status-badge.full { background: rgba(95, 184, 119, 0.15); color: var(--good); }
+  .status-badge.partial { background: rgba(212, 160, 74, 0.15); color: var(--warn); }
+  .status-badge.none { background: rgba(217, 106, 106, 0.15); color: var(--bad); }
+
+  .empty-state {
+    text-align: center;
+    color: var(--fg-3);
+    padding: 60px 20px;
+    font-size: 13px;
+  }
+  .empty-state strong { color: var(--fg-2); display: block; margin-bottom: 6px; font-size: 14px; }
+
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 18px 28px;
+    text-align: center;
+    color: var(--fg-3);
+    font-size: 12px;
+    margin-top: 40px;
+  }
+  footer a { color: var(--fg-2); text-decoration: none; }
+  footer a:hover { color: var(--fg); }
+
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>CORD Reference Dashboard <span class="v">v1.0.1</span></h1>
+  <div class="links">
+    <a href="https://cordspec.org" target="_blank" rel="noopener">Spec ↗</a>
+    <a href="https://github.com/CORD-LLC/CORD-engine" target="_blank" rel="noopener">Engine Repo ↗</a>
+  </div>
+</header>
+
+<main>
+
+  <!-- Drop zone -->
+  <div class="panel" id="dropPanel">
+    <h2>Load Envelopes</h2>
+    <div class="dropzone" id="dropzone">
+      <p><strong>Drop CORD envelopes here</strong></p>
+      <p class="hint">Single <code>.cord.json</code> file, multiple files, or a folder of envelopes</p>
+      <div class="or">— or —</div><br>
+      <button id="browseBtn">Browse files</button>
+      <button id="loadSampleBtn" style="margin-left: 8px;">Load sample data</button>
+      <input type="file" id="fileInput" multiple accept=".json,.cord.json" class="hidden">
+    </div>
+  </div>
+
+  <!-- Empty state -->
+  <div id="emptyState" class="empty-state">
+    <strong>No envelopes loaded yet</strong>
+    Drop a folder of <code>.cord.json</code> envelopes above to begin.
+  </div>
+
+  <!-- Active dashboard -->
+  <div id="dashboard" class="hidden">
+
+    <!-- Stats row -->
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-label">Envelopes</div>
+        <div class="stat-value" id="statCount">—</div>
+        <div class="stat-sub" id="statCountSub">across <span id="statDomains">0</span> domains</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Mean EFS</div>
+        <div class="stat-value" id="statMean">—</div>
+        <div class="stat-sub" id="statMeanSub">canonical decimal</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Median EFS</div>
+        <div class="stat-value" id="statMedian">—</div>
+        <div class="stat-sub" id="statMedianSub">p50</div>
+      </div>
+      <div class="stat">
+        <div class="stat-label">Below 0.50</div>
+        <div class="stat-value bad" id="statLow">—</div>
+        <div class="stat-sub" id="statLowSub">low-fidelity envelopes</div>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="filters">
+      <label>Domain</label>
+      <select id="filterDomain"><option value="">All</option></select>
+      <label>Source</label>
+      <select id="filterSource"><option value="">All</option></select>
+      <label>Target</label>
+      <select id="filterTarget"><option value="">All</option></select>
+      <div class="spacer"></div>
+      <div class="display-toggle">
+        <button id="displayDecimal" class="active">Decimal</button>
+        <button id="displayPercent">Percentage</button>
+      </div>
+      <button id="exportBtn">Export CSV</button>
+      <button id="clearBtn">Clear</button>
+    </div>
+
+    <!-- EFS distribution -->
+    <div class="panel">
+      <h2>EFS Distribution</h2>
+      <div class="histogram" id="histogram"></div>
+      <div class="hist-labels" id="histLabels"></div>
+    </div>
+
+    <!-- Two col: heatmap + envelope list -->
+    <div class="two-col">
+      <div class="panel">
+        <h2>Field Loss Heatmap</h2>
+        <p style="font-size: 12px; color: var(--fg-3); margin: 0 0 14px;">Per-field mapping status distribution across loaded envelopes. Sorted by share of NONE + PARTIAL.</p>
+        <div class="heatmap" id="heatmap"></div>
+      </div>
+      <div class="panel">
+        <h2>Envelopes</h2>
+        <p style="font-size: 12px; color: var(--fg-3); margin: 0 0 14px;">Click any row to view the full loss report and envelope metadata.</p>
+        <table class="envelope-list" id="envelopeTable">
+          <thead>
+            <tr>
+              <th data-sort="envelope_id">Envelope ID</th>
+              <th data-sort="domain">Domain</th>
+              <th data-sort="created_at">Created</th>
+              <th data-sort="efs">EFS <span class="sort-arrow">▼</span></th>
+            </tr>
+          </thead>
+          <tbody id="envelopeBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+</main>
+
+<!-- Detail modal -->
+<div class="modal-backdrop" id="modalBackdrop">
+  <div class="modal">
+    <button class="close" id="modalClose">Close</button>
+    <h3 id="modalTitle">Envelope Detail</h3>
+    <div class="meta-row" id="modalMeta"></div>
+    <h3>Loss Report</h3>
+    <pre id="modalLossReport"></pre>
+    <h3>Full Envelope</h3>
+    <pre id="modalFull"></pre>
+  </div>
+</div>
+
+<footer>
+  Reference dashboard for the <a href="https://cordspec.org" target="_blank" rel="noopener">CORD specification</a>.
+  Apache 2.0. Source: <a href="https://github.com/CORD-LLC/CORD-engine/tree/main/dashboard" target="_blank" rel="noopener">CORD-LLC/CORD-engine</a>.
+</footer>
+
+<script>
+// ============================================================================
+// CORD Reference Dashboard — vanilla JS, no build step, no dependencies.
+// Reads .cord.json envelopes and renders EFS distribution, field loss heatmap,
+// and a sortable envelope list with full loss-report detail views.
+// ============================================================================
+
+const state = {
+  envelopes: [],         // raw loaded envelopes
+  filtered: [],          // after filters applied
+  sort: { key: 'efs', dir: 'asc' },
+  display: 'decimal',    // 'decimal' | 'percent'
+  filters: { domain: '', source: '', target: '' }
+};
+
+// ---- EFS formatting (canonical decimal, optional percent display) ---------
+function fmtEFS(value) {
+  if (value == null || isNaN(value)) return '—';
+  if (state.display === 'percent') return Math.round(value * 100) + '%';
+  return value.toFixed(2);
+}
+function efsTier(value) {
+  if (value >= 0.90) return 'good';
+  if (value >= 0.50) return 'warn';
+  return 'bad';
+}
+function tierBucket(value) {
+  if (value >= 0.90) return 'high';
+  if (value >= 0.50) return 'mid';
+  return 'low';
+}
+
+// ---- File loading ---------------------------------------------------------
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+document.getElementById('browseBtn').addEventListener('click', e => { e.stopPropagation(); fileInput.click(); });
+dropzone.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', e => loadFiles(Array.from(e.target.files)));
+
+['dragenter','dragover'].forEach(ev => dropzone.addEventListener(ev, e => {
+  e.preventDefault(); dropzone.classList.add('over');
+}));
+['dragleave','drop'].forEach(ev => dropzone.addEventListener(ev, e => {
+  e.preventDefault(); dropzone.classList.remove('over');
+}));
+dropzone.addEventListener('drop', async e => {
+  const items = e.dataTransfer.items ? Array.from(e.dataTransfer.items) : [];
+  const files = [];
+  for (const item of items) {
+    if (item.kind !== 'file') continue;
+    const entry = item.webkitGetAsEntry?.();
+    if (entry) await collectEntry(entry, files);
+    else { const f = item.getAsFile(); if (f) files.push(f); }
+  }
+  if (files.length === 0 && e.dataTransfer.files) {
+    Array.from(e.dataTransfer.files).forEach(f => files.push(f));
+  }
+  loadFiles(files);
+});
+
+async function collectEntry(entry, files) {
+  if (entry.isFile) {
+    if (!entry.name.endsWith('.json')) return;
+    return new Promise(resolve => entry.file(f => { files.push(f); resolve(); }));
+  }
+  if (entry.isDirectory) {
+    const reader = entry.createReader();
+    return new Promise(resolve => {
+      reader.readEntries(async entries => {
+        for (const e of entries) await collectEntry(e, files);
+        resolve();
+      });
+    });
+  }
+}
+
+async function loadFiles(files) {
+  const envelopes = [];
+  for (const f of files) {
+    if (!f.name.endsWith('.json')) continue;
+    try {
+      const text = await f.text();
+      const parsed = JSON.parse(text);
+      if (Array.isArray(parsed)) envelopes.push(...parsed);
+      else envelopes.push(parsed);
+    } catch (err) {
+      console.warn('Skipped invalid JSON:', f.name, err);
+    }
+  }
+  if (envelopes.length === 0) return;
+  state.envelopes.push(...envelopes);
+  refresh();
+}
+
+// ---- Sample data (matches cordspec.org reference examples) ----------------
+document.getElementById('loadSampleBtn').addEventListener('click', e => {
+  e.stopPropagation();
+  state.envelopes.push(...SAMPLE_ENVELOPES);
+  refresh();
+});
+
+const SAMPLE_ENVELOPES = [
+  {
+    cord_version: "1.0", envelope_id: "a3f9c201-7d42-4b1a-9e0f-2c88d3f5ab01",
+    envelope_type: "snapshot", version: 1, parent_envelope_id: null,
+    created_at: "2026-04-14T10:22:00Z",
+    domain: "healthcare", source_system: "intake-ai-v2", target_system: "epic-ehr-adapter",
+    fields: [
+      { name: "chief_complaint", value: "chest pain", confidence: 0.97 },
+      { name: "icd10_codes", value: ["R07.9","R07.4","I20.9"], confidence: 0.84 },
+      { name: "pain_score", value: 7, confidence: 0.92 },
+      { name: "allergy_list", value: ["penicillin","sulfa"], confidence: 0.99 }
+    ],
+    legacy_output: {},
+    loss_report: { efs: 0.61, field_mappings: [
+      { field: "chief_complaint", status: "PARTIAL", note: "Radiation and onset detail truncated" },
+      { field: "icd10_codes", status: "PARTIAL", note: "Primary code only; 2 of 3 codes lost" },
+      { field: "pain_score", status: "FULL" },
+      { field: "allergy_list", status: "FULL" }
+    ]}
+  },
+  {
+    cord_version: "1.0", envelope_id: "c1f2e789-8b22-4f12-9c3d-441cb7901e01",
+    envelope_type: "snapshot", version: 1, parent_envelope_id: null,
+    created_at: "2026-04-15T14:08:00Z",
+    domain: "healthcare", source_system: "intake-ai-v2", target_system: "epic-ehr-adapter",
+    fields: [
+      { name: "chief_complaint", value: "headache", confidence: 0.95 },
+      { name: "pain_score", value: 5, confidence: 0.88 },
+      { name: "allergy_list", value: ["latex"], confidence: 0.99 }
+    ],
+    legacy_output: {},
+    loss_report: { efs: 0.83, field_mappings: [
+      { field: "chief_complaint", status: "FULL" },
+      { field: "pain_score", status: "FULL" },
+      { field: "allergy_list", status: "PARTIAL", note: "Severity not captured" }
+    ]}
+  },
+  {
+    cord_version: "1.0", envelope_id: "f8b71022-119e-4c80-bd3e-77d22a01b91c",
+    envelope_type: "snapshot", version: 1, parent_envelope_id: null,
+    created_at: "2026-04-16T09:14:00Z",
+    domain: "automotive", source_system: "sales-ai-v1", target_system: "vinsolutions-dms",
+    fields: [
+      { name: "vehicle_interest", value: { make:"Toyota", model:"Camry", year:2025, trim:"XSE" }, confidence: 0.95 },
+      { name: "budget", value: { max_monthly: 650, down_payment: 5000 }, confidence: 0.88 },
+      { name: "trade_in", value: { make:"Honda", model:"Civic", year:2019 }, confidence: 0.91 },
+      { name: "purchase_timeline", value: "within 2 weeks", confidence: 0.89 }
+    ],
+    legacy_output: {},
+    loss_report: { efs: 0.81, field_mappings: [
+      { field: "vehicle_interest", status: "FULL" },
+      { field: "budget", status: "PARTIAL", note: "Down payment detail lost" },
+      { field: "trade_in", status: "FULL" },
+      { field: "purchase_timeline", status: "FULL" }
+    ]}
+  },
+  {
+    cord_version: "1.0", envelope_id: "d92ac8e1-2210-49d3-bc01-882ef791c031",
+    envelope_type: "snapshot", version: 1, parent_envelope_id: null,
+    created_at: "2026-04-17T16:45:00Z",
+    domain: "automotive", source_system: "sales-ai-v1", target_system: "vinsolutions-dms",
+    fields: [
+      { name: "vehicle_interest", value: { make:"Honda", model:"CR-V", year:2025 }, confidence: 0.92 },
+      { name: "budget", value: { max_monthly: 550 }, confidence: 0.85 },
+      { name: "purchase_timeline", value: "within 4 weeks", confidence: 0.78 }
+    ],
+    legacy_output: {},
+    loss_report: { efs: 0.92, field_mappings: [
+      { field: "vehicle_interest", status: "FULL" },
+      { field: "budget", status: "FULL" },
+      { field: "purchase_timeline", status: "FULL" }
+    ]}
+  },
+  {
+    cord_version: "1.0", envelope_id: "b22f9012-77a1-4e8c-9b05-5018ab44c9e2",
+    envelope_type: "snapshot", version: 1, parent_envelope_id: null,
+    created_at: "2026-04-18T11:30:00Z",
+    domain: "real_estate", source_system: "listing-ai", target_system: "mls-adapter",
+    fields: [
+      { name: "property_condition", value: { roof: "2019", hvac: "2021" }, confidence: 0.88 },
+      { name: "seller_motivation", value: "relocation", confidence: 0.91 },
+      { name: "price_flexibility", value: "willing to negotiate", confidence: 0.79 },
+      { name: "listing_price", value: 485000, confidence: 1.0 }
+    ],
+    legacy_output: {},
+    loss_report: { efs: 0.42, field_mappings: [
+      { field: "property_condition", status: "PARTIAL", note: "Structured detail flattened" },
+      { field: "seller_motivation", status: "NONE", note: "No MLS field" },
+      { field: "price_flexibility", status: "NONE", note: "No MLS field" },
+      { field: "listing_price", status: "FULL" }
+    ]}
+  },
+  {
+    cord_version: "1.0", envelope_id: "e3c81fa9-6552-44de-aa11-c7019b2a5613",
+    envelope_type: "snapshot", version: 1, parent_envelope_id: null,
+    created_at: "2026-04-19T13:11:00Z",
+    domain: "hr", source_system: "screening-ai", target_system: "greenhouse-ats",
+    fields: [
+      { name: "skills", value: [{skill:"Python",years:6},{skill:"Kubernetes",years:3}], confidence: 0.94 },
+      { name: "salary_expectation", value: { min:140000, max:165000 }, confidence: 0.87 },
+      { name: "availability", value: "2 weeks notice", confidence: 0.96 },
+      { name: "work_preference", value: "hybrid", confidence: 0.91 }
+    ],
+    legacy_output: {},
+    loss_report: { efs: 0.53, field_mappings: [
+      { field: "skills", status: "PARTIAL", note: "Years lost" },
+      { field: "salary_expectation", status: "PARTIAL", note: "Range structure lost" },
+      { field: "availability", status: "PARTIAL" },
+      { field: "work_preference", status: "NONE" }
+    ]}
+  },
+  {
+    cord_version: "1.0", envelope_id: "f4a91c20-3318-4520-b1e2-e801fa334562",
+    envelope_type: "snapshot", version: 1, parent_envelope_id: null,
+    created_at: "2026-04-20T08:55:00Z",
+    domain: "healthcare", source_system: "intake-ai-v2", target_system: "epic-ehr-adapter",
+    fields: [
+      { name: "chief_complaint", value: "abdominal pain", confidence: 0.93 },
+      { name: "icd10_codes", value: ["R10.9"], confidence: 0.88 },
+      { name: "pain_score", value: 6, confidence: 0.91 },
+      { name: "allergy_list", value: [], confidence: 0.99 }
+    ],
+    legacy_output: {},
+    loss_report: { efs: 1.0, field_mappings: [
+      { field: "chief_complaint", status: "FULL" },
+      { field: "icd10_codes", status: "FULL" },
+      { field: "pain_score", status: "FULL" },
+      { field: "allergy_list", status: "FULL" }
+    ]}
+  }
+];
+
+// ---- Filters --------------------------------------------------------------
+['filterDomain','filterSource','filterTarget'].forEach(id => {
+  document.getElementById(id).addEventListener('change', e => {
+    const key = id.replace('filter','').toLowerCase();
+    state.filters[key] = e.target.value;
+    refresh(false);
+  });
+});
+
+document.getElementById('displayDecimal').addEventListener('click', () => setDisplay('decimal'));
+document.getElementById('displayPercent').addEventListener('click', () => setDisplay('percent'));
+function setDisplay(mode) {
+  state.display = mode;
+  document.getElementById('displayDecimal').classList.toggle('active', mode === 'decimal');
+  document.getElementById('displayPercent').classList.toggle('active', mode === 'percent');
+  refresh(false);
+}
+
+document.getElementById('clearBtn').addEventListener('click', () => {
+  if (!confirm('Remove all loaded envelopes?')) return;
+  state.envelopes = [];
+  refresh();
+});
+
+document.getElementById('exportBtn').addEventListener('click', exportCSV);
+
+function exportCSV() {
+  if (state.filtered.length === 0) return;
+  const rows = [['envelope_id','domain','source_system','target_system','created_at','efs_decimal','efs_percent']];
+  state.filtered.forEach(env => {
+    const efs = env.loss_report?.efs ?? '';
+    rows.push([
+      env.envelope_id ?? '', env.domain ?? '', env.source_system ?? '',
+      env.target_system ?? '', env.created_at ?? '',
+      efs === '' ? '' : efs.toFixed(2),
+      efs === '' ? '' : Math.round(efs * 100)
+    ]);
+  });
+  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `cord-envelopes-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// ---- Sort -----------------------------------------------------------------
+document.querySelectorAll('th[data-sort]').forEach(th => {
+  th.addEventListener('click', () => {
+    const key = th.dataset.sort;
+    if (state.sort.key === key) state.sort.dir = state.sort.dir === 'asc' ? 'desc' : 'asc';
+    else { state.sort.key = key; state.sort.dir = 'asc'; }
+    refresh(false);
+  });
+});
+
+// ---- Render ---------------------------------------------------------------
+function refresh(rebuildFilters = true) {
+  if (state.envelopes.length === 0) {
+    document.getElementById('emptyState').classList.remove('hidden');
+    document.getElementById('dashboard').classList.add('hidden');
+    return;
+  }
+  document.getElementById('emptyState').classList.add('hidden');
+  document.getElementById('dashboard').classList.remove('hidden');
+
+  if (rebuildFilters) populateFilters();
+  applyFilters();
+  renderStats();
+  renderHistogram();
+  renderHeatmap();
+  renderTable();
+}
+
+function populateFilters() {
+  ['domain','source_system','target_system'].forEach(field => {
+    const id = field === 'source_system' ? 'filterSource' : field === 'target_system' ? 'filterTarget' : 'filterDomain';
+    const sel = document.getElementById(id);
+    const current = sel.value;
+    const values = [...new Set(state.envelopes.map(e => e[field]).filter(Boolean))].sort();
+    sel.innerHTML = '<option value="">All</option>' + values.map(v => `<option value="${v}">${v}</option>`).join('');
+    sel.value = current;
+  });
+}
+
+function applyFilters() {
+  state.filtered = state.envelopes.filter(env => {
+    if (state.filters.domain && env.domain !== state.filters.domain) return false;
+    if (state.filters.source && env.source_system !== state.filters.source) return false;
+    if (state.filters.target && env.target_system !== state.filters.target) return false;
+    return true;
+  });
+  // sort
+  const { key, dir } = state.sort;
+  state.filtered.sort((a, b) => {
+    let va, vb;
+    if (key === 'efs') { va = a.loss_report?.efs ?? -1; vb = b.loss_report?.efs ?? -1; }
+    else { va = a[key] ?? ''; vb = b[key] ?? ''; }
+    if (va < vb) return dir === 'asc' ? -1 : 1;
+    if (va > vb) return dir === 'asc' ? 1 : -1;
+    return 0;
+  });
+}
+
+function renderStats() {
+  const efsVals = state.filtered.map(e => e.loss_report?.efs).filter(v => typeof v === 'number');
+  const count = state.filtered.length;
+  const domains = new Set(state.filtered.map(e => e.domain)).size;
+  const mean = efsVals.length ? efsVals.reduce((s,v)=>s+v,0) / efsVals.length : 0;
+  const sorted = [...efsVals].sort((a,b)=>a-b);
+  const median = sorted.length ? sorted[Math.floor(sorted.length/2)] : 0;
+  const lowCount = efsVals.filter(v => v < 0.5).length;
+
+  document.getElementById('statCount').textContent = count;
+  document.getElementById('statDomains').textContent = domains;
+  document.getElementById('statMean').textContent = fmtEFS(mean);
+  document.getElementById('statMean').className = 'stat-value ' + efsTier(mean);
+  document.getElementById('statMedian').textContent = fmtEFS(median);
+  document.getElementById('statMedian').className = 'stat-value ' + efsTier(median);
+  document.getElementById('statLow').textContent = lowCount;
+  document.getElementById('statLowSub').textContent = `${lowCount === 1 ? 'envelope below' : 'envelopes below'} 0.50`;
+}
+
+function renderHistogram() {
+  const buckets = new Array(10).fill(0);
+  state.filtered.forEach(e => {
+    const v = e.loss_report?.efs;
+    if (typeof v !== 'number') return;
+    const idx = Math.min(9, Math.floor(v * 10));
+    buckets[idx]++;
+  });
+  const max = Math.max(...buckets, 1);
+  const histEl = document.getElementById('histogram');
+  histEl.innerHTML = buckets.map((count, i) => {
+    const tier = i >= 9 ? 'high' : i >= 5 ? 'mid' : 'low';
+    const height = (count / max) * 100;
+    return `<div class="hist-bar" data-tier="${tier}" style="height:${height}%" title="${(i/10).toFixed(1)}–${((i+1)/10).toFixed(1)}: ${count} envelope${count===1?'':'s'}"></div>`;
+  }).join('');
+  document.getElementById('histLabels').innerHTML = buckets.map((_, i) =>
+    `<div>${state.display==='percent' ? (i*10) : (i/10).toFixed(1)}</div>`
+  ).join('');
+}
+
+function renderHeatmap() {
+  const fieldStats = {};
+  state.filtered.forEach(env => {
+    (env.loss_report?.field_mappings || []).forEach(fm => {
+      if (!fieldStats[fm.field]) fieldStats[fm.field] = { full:0, partial:0, none:0, total:0 };
+      const s = (fm.status || '').toLowerCase();
+      if (s === 'full') fieldStats[fm.field].full++;
+      else if (s === 'partial') fieldStats[fm.field].partial++;
+      else if (s === 'none') fieldStats[fm.field].none++;
+      fieldStats[fm.field].total++;
+    });
+  });
+
+  // NOTE: This sort weight is a presentation-only heuristic for ordering rows
+  // in the heatmap. It is not related to any EFS computation. The dashboard
+  // never computes EFS — it only reads `loss_report.efs` from envelopes
+  // produced by a CORD-conformant engine.
+  const rows = Object.entries(fieldStats).map(([field, s]) => ({
+    field,
+    full: s.full / s.total,
+    partial: s.partial / s.total,
+    none: s.none / s.total,
+    // Sort key: prioritize fields with any NONE, then by share of non-FULL.
+    // Pure UI ordering; not a fidelity score.
+    badness: s.none > 0 ? 1 + (s.none / s.total) : (1 - s.full / s.total),
+    total: s.total
+  })).sort((a,b) => b.badness - a.badness);
+
+  const html = rows.map(r => `
+    <div class="heat-row" title="${r.field}: ${(r.full*100).toFixed(0)}% FULL, ${(r.partial*100).toFixed(0)}% PARTIAL, ${(r.none*100).toFixed(0)}% NONE (n=${r.total})">
+      <div class="heat-field">${r.field}</div>
+      <div class="heat-bar">
+        ${r.full > 0 ? `<div class="heat-segment full" style="width:${r.full*100}%"></div>` : ''}
+        ${r.partial > 0 ? `<div class="heat-segment partial" style="width:${r.partial*100}%"></div>` : ''}
+        ${r.none > 0 ? `<div class="heat-segment none" style="width:${r.none*100}%"></div>` : ''}
+      </div>
+    </div>
+  `).join('');
+  document.getElementById('heatmap').innerHTML = html || '<div class="empty-state" style="padding:30px;">No field mappings in current filter.</div>';
+}
+
+function renderTable() {
+  const body = document.getElementById('envelopeBody');
+  if (state.filtered.length === 0) {
+    body.innerHTML = '<tr class="empty"><td colspan="4">No envelopes match the current filters.</td></tr>';
+    return;
+  }
+  body.innerHTML = state.filtered.map((env, idx) => {
+    const efs = env.loss_report?.efs;
+    const tier = typeof efs === 'number' ? efsTier(efs) : '';
+    const efsStr = fmtEFS(efs);
+    const idShort = (env.envelope_id || '').slice(0, 8);
+    const date = env.created_at ? env.created_at.slice(0, 10) : '—';
+    return `<tr class="selectable" data-idx="${idx}">
+      <td>${idShort}…</td>
+      <td>${env.domain || '—'}</td>
+      <td>${date}</td>
+      <td class="efs ${tier}">${efsStr}</td>
+    </tr>`;
+  }).join('');
+  body.querySelectorAll('tr.selectable').forEach(tr => {
+    tr.addEventListener('click', () => openModal(state.filtered[+tr.dataset.idx]));
+  });
+  // sort arrows
+  document.querySelectorAll('th[data-sort] .sort-arrow').forEach(s => s.remove());
+  const activeTh = document.querySelector(`th[data-sort="${state.sort.key}"]`);
+  if (activeTh) {
+    const arrow = document.createElement('span');
+    arrow.className = 'sort-arrow';
+    arrow.textContent = state.sort.dir === 'asc' ? '▲' : '▼';
+    activeTh.appendChild(arrow);
+  }
+}
+
+// ---- Modal ----------------------------------------------------------------
+const modalBackdrop = document.getElementById('modalBackdrop');
+document.getElementById('modalClose').addEventListener('click', () => modalBackdrop.classList.remove('open'));
+modalBackdrop.addEventListener('click', e => { if (e.target === modalBackdrop) modalBackdrop.classList.remove('open'); });
+
+function openModal(env) {
+  document.getElementById('modalTitle').textContent = env.envelope_id || 'Envelope Detail';
+  const efs = env.loss_report?.efs;
+  document.getElementById('modalMeta').innerHTML = `
+    <div class="meta"><span>EFS</span><strong class="${efs!=null?efsTier(efs):''}" style="color:var(--${efs!=null?(efsTier(efs)==='good'?'good':efsTier(efs)==='warn'?'warn':'bad'):'fg'})">${fmtEFS(efs)}</strong></div>
+    <div class="meta"><span>Domain</span><strong>${env.domain || '—'}</strong></div>
+    <div class="meta"><span>Source</span><strong>${env.source_system || '—'}</strong></div>
+    <div class="meta"><span>Target</span><strong>${env.target_system || '—'}</strong></div>
+    <div class="meta"><span>Created</span><strong>${env.created_at || '—'}</strong></div>
+  `;
+  // pretty-printed loss report with status badges inline
+  const lr = env.loss_report || {};
+  const mappings = (lr.field_mappings || []).map(fm => {
+    const status = (fm.status || '').toLowerCase();
+    const badge = `<span class="status-badge ${status}">${(fm.status||'').toUpperCase()}</span>`;
+    return `  ${fm.field.padEnd(28)} ${badge}${fm.note ? '  <span style="color:var(--fg-3)">// ' + fm.note + '</span>' : ''}`;
+  }).join('\n');
+  document.getElementById('modalLossReport').innerHTML =
+    `EFS: ${fmtEFS(lr.efs)}\n\nField mappings:\n${mappings || '  (none)'}`;
+  document.getElementById('modalFull').textContent = JSON.stringify(env, null, 2);
+  modalBackdrop.classList.add('open');
+}
+
+// ---- Boot -----------------------------------------------------------------
+refresh();
+</script>
+
+</body>
+</html>
